@@ -91,7 +91,7 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 -- [[ Setting options ]]
 -- See `:help vim.o`
@@ -102,7 +102,7 @@ vim.g.have_nerd_font = false
 vim.o.number = true
 -- You can also add relative line numbers, to help with jumping.
 --  Experiment for yourself to see if you like it!
--- vim.o.relativenumber = true
+vim.o.relativenumber = true
 
 -- Enable mouse mode, can be useful for resizing splits for example!
 vim.o.mouse = 'a'
@@ -198,10 +198,10 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
 
 -- TIP: Disable arrow keys in normal mode
--- vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
--- vim.keymap.set('n', '<right>', '<cmd>echo "Use l to move!!"<CR>')
--- vim.keymap.set('n', '<up>', '<cmd>echo "Use k to move!!"<CR>')
--- vim.keymap.set('n', '<down>', '<cmd>echo "Use j to move!!"<CR>')
+vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
+vim.keymap.set('n', '<right>', '<cmd>echo "Use l to move!!"<CR>')
+vim.keymap.set('n', '<up>', '<cmd>echo "Use k to move!!"<CR>')
+vim.keymap.set('n', '<down>', '<cmd>echo "Use j to move!!"<CR>')
 
 -- Keybinds to make split navigation easier.
 --  Use CTRL+<hjkl> to switch between windows
@@ -211,6 +211,28 @@ vim.keymap.set('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left wind
 vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
+
+local function check_external_tools()
+  local tools = { 'node', 'npm', 'devcontainer', 'docker', 'podman' }
+  local lines = {}
+  local missing = {}
+
+  for _, tool in ipairs(tools) do
+    local path = vim.fn.exepath(tool)
+    if path ~= '' then
+      table.insert(lines, ('OK   %s: %s'):format(tool, path))
+    else
+      table.insert(lines, ('MISS %s: not found in PATH'):format(tool))
+      table.insert(missing, tool)
+    end
+  end
+
+  local level = #missing == 0 and vim.log.levels.INFO or vim.log.levels.WARN
+  vim.notify(table.concat(lines, '\n'), level, { title = 'External Tools Check' })
+end
+
+vim.api.nvim_create_user_command('CheckExternalTools', check_external_tools, { desc = 'Check external runtime tools (node/npm/devcontainer/docker/podman)' })
+vim.keymap.set('n', '<leader>ct', check_external_tools, { desc = '[C]heck external [T]ools' })
 
 -- NOTE: Some terminals have colliding keymaps or are not able to send distinct keycodes
 -- vim.keymap.set("n", "<C-S-h>", "<C-w>H", { desc = "Move window to the left" })
@@ -311,10 +333,46 @@ require('lazy').setup({
       -- Document existing key chains
       spec = {
         { '<leader>s', group = '[S]earch', mode = { 'n', 'v' } },
+        { '<leader>c', group = '[C]heck' },
         { '<leader>t', group = '[T]oggle' },
         { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
       },
     },
+  },
+
+  { -- GitHub Copilot core
+    'zbirenbaum/copilot.lua',
+    event = 'VimEnter',
+    cmd = 'Copilot',
+    opts = {
+      suggestion = { enabled = false },
+      panel = { enabled = false },
+    },
+  },
+
+  { -- GitHub Copilot Chat
+    'CopilotC-Nvim/CopilotChat.nvim',
+    cmd = { 'CopilotChat', 'CopilotChatToggle', 'CopilotChatOpen' },
+    dependencies = {
+      'zbirenbaum/copilot.lua',
+      'nvim-lua/plenary.nvim',
+    },
+    opts = {},
+    keys = {
+      { '<leader>aa', '<cmd>CopilotChatToggle<cr>', desc = 'Toggle Copilot Chat' },
+    },
+  },
+
+  { -- Devcontainer integration
+    'esensar/nvim-dev-container',
+    cmd = {
+      'DevcontainerAttachToContainer',
+      'DevcontainerExec',
+      'DevcontainerStart',
+      'DevcontainerStop',
+    },
+    dependencies = { 'nvim-treesitter/nvim-treesitter' },
+    opts = {},
   },
 
   -- NOTE: Plugins can specify dependencies.
@@ -482,10 +540,10 @@ require('lazy').setup({
       -- NOTE: `opts = {}` is the same as calling `require('mason').setup({})`
       { 'mason-org/mason.nvim', opts = {} },
       'WhoIsSethDaniel/mason-tool-installer.nvim',
-     
-        -- This plugin streamlines Neovim's LSP setup by automating server installation and activation, providing helpful management commands, and mapping mason.nvim packages to nvim-lspconfig configurations.
+
+      -- This plugin streamlines Neovim's LSP setup by automating server installation and activation, providing helpful management commands, and mapping mason.nvim packages to nvim-lspconfig configurations.
       { 'mason-org/mason-lspconfig.nvim', opts = {} },
-        
+
       -- Useful status updates for LSP.
       { 'j-hui/fidget.nvim', opts = {} },
 
@@ -598,14 +656,17 @@ require('lazy').setup({
       local servers = {
         -- clangd = {},
         -- gopls = {},
-        -- pyright = {},
+        pyright = {},
+        intelephense = {},
         -- rust_analyzer = {},
         --
         -- Some languages (like typescript) have entire language plugins that can be useful:
         --    https://github.com/pmizio/typescript-tools.nvim
         --
         -- But for many setups, the LSP (`ts_ls`) will work just fine
-        -- ts_ls = {},
+        ts_ls = {},
+        bashls = {},
+        jsonls = {},
       }
 
       -- Ensure the servers and tools above are installed
@@ -619,6 +680,11 @@ require('lazy').setup({
       vim.list_extend(ensure_installed, {
         'lua_ls', -- Lua Language server
         'stylua', -- Used to format Lua code
+        'black',
+        'isort',
+        'ruff',
+        'prettier',
+        'php-cs-fixer',
         -- You can add other tools here that you want Mason to install
       })
 
@@ -689,11 +755,12 @@ require('lazy').setup({
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
-        -- Conform can also run multiple formatters sequentially
-        -- python = { "isort", "black" },
-        --
-        -- You can use 'stop_after_first' to run the first available formatter from the list
-        -- javascript = { "prettierd", "prettier", stop_after_first = true },
+        python = { 'isort', 'black' },
+        javascript = { 'prettier' },
+        javascriptreact = { 'prettier' },
+        typescript = { 'prettier' },
+        typescriptreact = { 'prettier' },
+        php = { 'php_cs_fixer' },
       },
     },
   },
@@ -875,7 +942,7 @@ require('lazy').setup({
   --
   -- require 'kickstart.plugins.debug',
   -- require 'kickstart.plugins.indent_line',
-  -- require 'kickstart.plugins.lint',
+  require 'kickstart.plugins.lint',
   -- require 'kickstart.plugins.autopairs',
   -- require 'kickstart.plugins.neo-tree',
   -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
